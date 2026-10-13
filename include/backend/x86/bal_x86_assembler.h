@@ -309,6 +309,19 @@ extern "C"
                                   bal_x86_register_t   destination,
                                   bal_x86_register_t   source);
 
+    /// Emits an indirect call to the address in a 64-bit register.
+    ///
+    /// Assembly equivalent: `call reg64`
+    ///
+    /// # Warning
+    ///
+    /// This function fails if:
+    ///
+    /// - `assembler` is `NULL`.
+    /// - `assembler->status` != [`BAL_SUCCESS`]
+    /// - `assembler->buffer` is full.
+    void bal_x86_emit_call_r64(bal_x86_assembler_t *assembler, bal_x86_register_t reg);
+
     /// Emits a conditional jump to a relative 32-bit offset.
     ///
     /// Assembler equivalent : `jcc offset`

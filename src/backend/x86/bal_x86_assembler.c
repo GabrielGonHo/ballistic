@@ -239,6 +239,65 @@ bal_x86_emit_and_r64_r64(bal_x86_assembler_t     *assembler,
 }
 
 void
+bal_x86_emit_call_r64(bal_x86_assembler_t *assembler, bal_x86_register_t reg)
+{
+    if (BAL_UNLIKELY(NULL == assembler))
+    {
+        return;
+    }
+
+    if (BAL_UNLIKELY(assembler->status != BAL_SUCCESS))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: assembler status != BAL_SUCCESS");
+        return;
+    }
+
+    const bool is_valid_register_result = is_valid_register(reg);
+
+    if (BAL_UNLIKELY(false == is_valid_register_result))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Invalid register: %d", reg);
+        assembler->status = BAL_ERROR_INVALID_ARGUMENT;
+        return;
+    }
+
+    size_t     instruction_size_bytes = 2U;
+
+    if (reg > 7)
+    {
+        instruction_size_bytes = 3U;
+    }
+
+    const bool can_emit_status = can_emit(assembler, instruction_size_bytes);
+
+    if (BAL_UNLIKELY(false == can_emit_status))
+    {
+        return;
+    }
+
+    BAL_LOG_DEBUG(&bal_thread_logger, "[+0x%04zx] call r%d", assembler->offset, reg);
+    const size_t old_offset = assembler->offset;
+
+    if (reg > 7)
+    {
+        const uint8_t w = 0U;
+        const uint8_t r = 0U;
+        const uint8_t b = (uint8_t)reg >> 3;
+        emit_rex(assembler->buffer, &assembler->offset, w, r, b);
+    }
+
+    emit8(assembler->buffer, &assembler->offset, 0xFFU);
+    const uint8_t safe_reg = (uint8_t)reg & 7;
+    const uint8_t modrm    = (uint8_t)(0xC0U | (2U << 3U) | safe_reg);
+    emit8(assembler->buffer, &assembler->offset, modrm);
+    const size_t bytes_emitted = assembler->offset - old_offset;
+    BAL_ASSERT_MSG(bytes_emitted == instruction_size_bytes,
+                   "Bytes emitted %d does not match instruction size %d",
+                   bytes_emitted,
+                   instruction_size_bytes);
+}
+
+void
 bal_x86_emit_jmp_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t reg)
 {
     if (BAL_UNLIKELY(NULL == assembler))
