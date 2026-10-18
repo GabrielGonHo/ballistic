@@ -79,8 +79,8 @@ static void translate_cbz_cbnz(bal_tier1_compiler_t                     *compile
 
 static void translate_jump(const bal_tier1_compiler_t               *compiler,
                            const bal_decoder_instruction_metadata_t *metadata,
-                           const uint32_t                            instruction,
-                           const bal_guest_address_t                 guest_address,
+                           uint32_t                            instruction,
+                           bal_guest_address_t                 guest_address,
                            bal_guest_address_t                      *target_pc);
 
 static void translate_and_reg(bal_tier1_compiler_t                     *compiler,
