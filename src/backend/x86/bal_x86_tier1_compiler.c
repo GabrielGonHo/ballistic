@@ -12,10 +12,12 @@
 #if BAL_PLATFORM_WINDOWS
 
 #define BAL_X86_ABI_ARG1 BAL_X86_RCX
+#define BAL_X86_ABI_ARG2 BAL_X86_RDX
 
 #else
 
 #define BAL_X86_ABI_ARG1 BAL_X86_RDI
+#define BAL_X86_ABI_ARG2 BAL_X86_RSI
 
 #endif
 
@@ -1360,7 +1362,7 @@ translate_and_reg(bal_tier1_compiler_t *BAL_RESTRICT                     compile
         {
             shift_opcode = BAL_X86_MACRO_ROR_REGISTER_IMMEDIATE;
         }
-        if (rd!=rm || is_zero_register)
+        if (rd != rm || is_zero_register)
         {
             const bal_x86_macro_t mov_macro = {
                 .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER,
@@ -1371,14 +1373,12 @@ translate_and_reg(bal_tier1_compiler_t *BAL_RESTRICT                     compile
             x86_operand2 = BAL_X86_REGISTER_DISCARD_RESULT;
         }
 
-
         const bal_x86_macro_t shift_macro = {
             .opcode              = shift_opcode,
             .destination         = x86_operand2,
             .immediate_or_offset = shift_amount,
         };
         bal_sliding_window_push(&compiler->window, shift_macro);
-
     }
 
     if (is_zero_register)
@@ -1442,10 +1442,10 @@ translate_and_reg(bal_tier1_compiler_t *BAL_RESTRICT                     compile
         };
         bal_sliding_window_push(&compiler->window, set_v_macro);
 
-        const bal_x86_macro_t     set_c_macro = {
-                .opcode              = BAL_X86_MACRO_SETCC,
-                .condition           = BAL_X86_COND_B,
-                .immediate_or_offset = offsetof(bal_cpu_t, flag_c),
+        const bal_x86_macro_t set_c_macro = {
+            .opcode              = BAL_X86_MACRO_SETCC,
+            .condition           = BAL_X86_COND_B,
+            .immediate_or_offset = offsetof(bal_cpu_t, flag_c),
         };
         bal_sliding_window_push(&compiler->window, set_c_macro);
     }
