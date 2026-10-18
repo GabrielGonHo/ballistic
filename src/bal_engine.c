@@ -81,8 +81,11 @@ static void *block_cache_lookup(const block_cache_set_t *BAL_RESTRICT cache,
 
 /// Inserts a newly compiled JIT block into cache.
 static void block_cache_insert(block_cache_set_t *BAL_RESTRICT cache,
-                               const bal_guest_address_t       pc,
+                               bal_guest_address_t             pc,
                                void                           *host_code);
+
+/// Helper function which gets called by LDR instructions.
+static uint64_t guest_read(void *context, uint64_t guest_address);
 
 BAL_COLD bal_error_t
 bal_engine_init(bal_engine_t *BAL_RESTRICT                 engine,
@@ -247,12 +250,14 @@ bal_engine_init(bal_engine_t *BAL_RESTRICT                 engine,
     atomic_init(&internal_engine_state->thread_state.stop_requested, false);
     atomic_init(&internal_engine_state->thread_state.clear_cache_requested, false);
 
-    engine->cpu              = cpu;
-    engine->allocator        = allocator;
-    engine->memory_interface = memory_interface;
-    engine->engine_state     = internal_engine_state;
-    engine->status           = BAL_SUCCESS;
-    engine->flags            = 0;
+    engine->cpu                     = cpu;
+    engine->allocator               = allocator;
+    engine->memory_interface        = memory_interface;
+    engine->engine_state            = internal_engine_state;
+    engine->status                  = BAL_SUCCESS;
+    engine->flags                   = 0U;
+    engine->cpu->guest_read         = guest_read;
+    engine->cpu->guest_read_context = (uintptr_t)engine;
     return engine->status;
 }
 
@@ -596,4 +601,56 @@ block_cache_insert(block_cache_set_t *BAL_RESTRICT cache,
     const uint32_t evict_way      = (pc >> 4) & (BLOCK_CACHE_WAYS - 1);
     ways[evict_way].guest_address = pc;
     ways[evict_way].host_code     = host_code;
+}
+
+static uint64_t
+guest_read(void *context, const uint64_t guest_address)
+{
+    bal_engine_t *BAL_RESTRICT engine = (bal_engine_t *)context;
+
+    if (BAL_UNLIKELY(NULL == engine))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: engine is NULL.");
+        return 0U;
+    }
+
+    const bal_memory_interface_t *BAL_RESTRICT memory_interface = engine->memory_interface;
+
+    if (BAL_UNLIKELY(NULL == memory_interface))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: memory_interface is NULL.");
+        engine->status = BAL_ERROR_INVALID_ARGUMENT;
+        return 0U;
+    }
+
+    if (BAL_UNLIKELY(NULL == memory_interface->translate))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger,
+                      "Aborting function: memory_interface->translate is NULL.");
+        return 0U;
+    }
+
+    size_t                      max_readable_bytes = 0U;
+    const uint8_t *BAL_RESTRICT host_pointer       = memory_interface->translate(
+        memory_interface->context, guest_address, &max_readable_bytes);
+
+    if (BAL_UNLIKELY(NULL == host_pointer))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: host_pointer is NULL.");
+        engine->status = BAL_ERROR_MEMORY_FAULT;
+        return 0U;
+    }
+
+    if (BAL_UNLIKELY(max_readable_bytes < sizeof(uint64_t)))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger,
+                      "Aborting function: max_readable_bytes (%u) is less than sizeof(uint64_t)",
+                      max_readable_bytes);
+        engine->status = BAL_ERROR_MEMORY_FAULT;
+        return 0U;
+    }
+
+    uint64_t value = 0U;
+    (void)memcpy(&value, host_pointer, sizeof(value));
+    return value;
 }
