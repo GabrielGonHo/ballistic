@@ -631,8 +631,8 @@ guest_read(void *context, const uint64_t guest_address)
     }
 
     size_t                      max_readable_bytes = 0U;
-    const uint8_t *BAL_RESTRICT host_pointer       = memory_interface->translate(
-        memory_interface->context, guest_address, &max_readable_bytes);
+    const uint8_t *BAL_RESTRICT host_pointer
+        = memory_interface->translate((void *)memory_interface, guest_address, &max_readable_bytes);
 
     if (BAL_UNLIKELY(NULL == host_pointer))
     {
