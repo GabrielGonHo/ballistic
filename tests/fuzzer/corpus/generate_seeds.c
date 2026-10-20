@@ -48,6 +48,7 @@ main(void)
             || metadata_cursor->ir_opcode == OPCODE_RETURN
             || metadata_cursor->ir_opcode == OPCODE_CALL_HOST)
         {
+            ++metadata_cursor;
             continue;
         }
 
