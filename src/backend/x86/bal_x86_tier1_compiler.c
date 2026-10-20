@@ -1578,7 +1578,7 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
     if (false == is_64bit)
     {
         // Clear the upper 32 bits.
-        bal_x86_emit_mov_r64_r64(assembler_context, BAL_X86_RAX, BAL_X86_RAX);
+        bal_x86_emit_mov_r32_r32(assembler_context, BAL_X86_RAX, BAL_X86_RAX);
     }
 
     const int32_t rt_offset = (int32_t)(offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t));
