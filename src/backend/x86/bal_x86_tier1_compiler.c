@@ -1513,24 +1513,31 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
     flush_dirty_registers(compiler);
     bal_sliding_window_flush_all(&compiler->window);
 
-    bal_x86_assembler_t *BAL_RESTRICT assembler_context = &compiler->assembler;
-
     // GVA = x[Rn] + offset
 
-    const int32_t rn_offset = (int32_t)(offsetof(bal_cpu_t, x) + rn * sizeof(uint64_t));
-    bal_x86_emit_load_r64_rbp_offset(assembler_context, ASSEMBLER_TEMPORARY_REGISTER, rn_offset);
+    const uint64_t        rn_offset     = offsetof(bal_cpu_t, x) + rn * sizeof(uint64_t);
+    const bal_x86_macro_t load_rn_macro = {
+        .opcode              = BAL_X86_MACRO_LOAD,
+        .destination         = ASSEMBLER_TEMPORARY_REGISTER,
+        .immediate_or_offset = rn_offset,
+    };
+    bal_sliding_window_push(&compiler->window, load_rn_macro);
 
     if (true == is_immediate_offset)
     {
         // imm12 is scaled by the access size (8  for 64-bit, 4 for 32-bit).
         const uint32_t raw_immediate = extract_operand_value(instruction, &operands[2]);
         const uint32_t scale         = is_64bit ? 8U : 4U;
-        const int32_t  byte_offset   = (int32_t)(raw_immediate * scale);
+        const uint64_t byte_offset   = raw_immediate * scale;
 
-        if (byte_offset != 0)
+        if (byte_offset != 0U)
         {
-            bal_x86_emit_add_r64_imm32(
-                assembler_context, ASSEMBLER_TEMPORARY_REGISTER, byte_offset);
+            const bal_x86_macro_t add_offset_macro = {
+                .opcode              = BAL_X86_MACRO_ADD_REGISTER_IMMEDIATE,
+                .destination         = ASSEMBLER_TEMPORARY_REGISTER,
+                .immediate_or_offset = byte_offset,
+            };
+            bal_sliding_window_push(&compiler->window, add_offset_macro);
         }
     }
     else
@@ -1545,31 +1552,71 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
             return;
         }
 
-        const int32_t rm_offset = (int32_t)(offsetof(bal_cpu_t, x) + rm * sizeof(uint64_t));
+        const uint64_t rm_offset = offsetof(bal_cpu_t, x) + rm * sizeof(uint64_t);
 
         // Use R10 to avoid clobbering ASSEMBLER_TEMPORARY_REGISTER.
-        bal_x86_emit_load_r64_rbp_offset(assembler_context, BAL_X86_R10, rm_offset);
-        bal_x86_emit_add_r64_r64(assembler_context, ASSEMBLER_TEMPORARY_REGISTER, BAL_X86_R10);
+        const bal_x86_macro_t load_rm_macro = {
+            .opcode              = BAL_X86_MACRO_LOAD,
+            .destination         = BAL_X86_R10,
+            .immediate_or_offset = rm_offset,
+        };
+        bal_sliding_window_push(&compiler->window, load_rm_macro);
+
+        const bal_x86_macro_t add_rm_macro = {
+            .opcode      = BAL_X86_MACRO_ADD_REGISTER_REGISTER,
+            .destination = ASSEMBLER_TEMPORARY_REGISTER,
+            .source      = BAL_X86_R10,
+        };
+        bal_sliding_window_push(&compiler->window, add_rm_macro);
     }
 
-    bal_x86_emit_load_r64_rbp_offset(
-        assembler_context, BAL_X86_ABI_ARG1, offsetof(bal_cpu_t, guest_read_context));
-    bal_x86_emit_mov_r64_r64(assembler_context, BAL_X86_ABI_ARG2, ASSEMBLER_TEMPORARY_REGISTER);
-    bal_x86_emit_load_r64_rbp_offset(
-        assembler_context, ASSEMBLER_TEMPORARY_REGISTER, offsetof(bal_cpu_t, guest_read));
+    const bal_x86_macro_t load_guest_read_context_macro = {
+        .opcode              = BAL_X86_MACRO_LOAD,
+        .destination         = BAL_X86_ABI_ARG1,
+        .immediate_or_offset = offsetof(bal_cpu_t, guest_read_context),
+    };
+    bal_sliding_window_push(&compiler->window, load_guest_read_context_macro);
+
+    const bal_x86_macro_t mov_arg2_macro = {
+        .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER,
+        .destination = BAL_X86_ABI_ARG2,
+        .source      = ASSEMBLER_TEMPORARY_REGISTER,
+    };
+    bal_sliding_window_push(&compiler->window, mov_arg2_macro);
+
+    const bal_x86_macro_t load_guest_read_function_pointer_macro = {
+        .opcode              = BAL_X86_MACRO_LOAD,
+        .destination         = ASSEMBLER_TEMPORARY_REGISTER,
+        .immediate_or_offset = offsetof(bal_cpu_t, guest_read),
+    };
+    bal_sliding_window_push(&compiler->window, load_guest_read_function_pointer_macro);
 
 #if BAL_PLATFORM_WINDOWS
 
     // Windows require 32 bytes of shadow space before a call.
-    bal_x86_emit_sub_r64_imm32(assembler_context, BAL_X86_RSP, 32);
+    const bal_x86_macro_t shadow_sub_macro = {
+        .opcode              = BAL_X86_MACRO_SUB_REGISTER_IMMEDIATE,
+        .destination         = BAL_X86_RSP,
+        .immediate_or_offset = 32U,
+    };
+    bal_sliding_window_push(&compiler->window, shadow_sub_macro);
 
 #endif
 
-    bal_x86_emit_call_r64(assembler_context, ASSEMBLER_TEMPORARY_REGISTER);
+    const bal_x86_macro_t call_macro = {
+        .opcode      = BAL_X86_MACRO_CALL_REGISTER,
+        .destination = ASSEMBLER_TEMPORARY_REGISTER,
+    };
+    bal_sliding_window_push(&compiler->window, call_macro);
 
 #if BAL_PLATFORM_WINDOWS
 
-    bal_x86_emit_add_r64_imm32(assembler_context, BAL_X86_RSP, 32);
+    const bal_x86_macro_t shadow_add_macro = {
+        .opcode              = BAL_X86_MACRO_ADD_REGISTER_IMMEDIATE,
+        .destination         = BAL_X86_RSP,
+        .immediate_or_offset = 32U,
+    };
+    bal_sliding_window_push(&compiler->window, shadow_add_macro);
 
 #endif
 
@@ -1578,11 +1625,21 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
     if (false == is_64bit)
     {
         // Clear the upper 32 bits.
-        bal_x86_emit_mov_r32_r32(assembler_context, BAL_X86_RAX, BAL_X86_RAX);
+        bal_x86_macro_t zero_extend_macro = {
+            .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER_32,
+            .destination = BAL_X86_RAX,
+            .source      = BAL_X86_RAX,
+        };
+        bal_sliding_window_push(&compiler->window, zero_extend_macro);
     }
 
-    const int32_t rt_offset = (int32_t)(offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t));
-    bal_x86_emit_store_r64_rbp_offset(assembler_context, BAL_X86_RAX, rt_offset);
+    const uint64_t        rt_offset      = offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t);
+    const bal_x86_macro_t store_rt_macro = {
+        .opcode              = BAL_X86_MACRO_STORE,
+        .source              = BAL_X86_RAX,
+        .immediate_or_offset = rt_offset,
+    };
+    bal_sliding_window_push(&compiler->window, store_rt_macro);
     reset_register_allocator(compiler);
 
     BAL_LOG_DEBUG(&bal_thread_logger,
