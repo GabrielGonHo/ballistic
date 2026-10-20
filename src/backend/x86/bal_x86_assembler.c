@@ -261,7 +261,7 @@ bal_x86_emit_call_r64(bal_x86_assembler_t *assembler, bal_x86_register_t reg)
         return;
     }
 
-    size_t     instruction_size_bytes = 2U;
+    size_t instruction_size_bytes = 2U;
 
     if (reg > 7)
     {
@@ -1746,6 +1746,7 @@ bal_x86_emit_sub_r32_imm32(bal_x86_assembler_t *assembler,
     emit_rex(assembler->buffer, &assembler->offset, w, r, b);
     const uint8_t opcode = true == fit_in_8_bits ? 0x83 : 0x81;
     emit8(assembler->buffer, &assembler->offset, opcode);
+    emit_modrm_register(assembler->buffer, &assembler->offset, BAL_X86_RBP, destination);
 
     if (true == fit_in_8_bits)
     {
