@@ -34,6 +34,9 @@ static const bal_x86_register_t SCRATCH_REGISTERS[]
 /// Dedicated throwaway register for instructions that update flags but discards the result.
 #define BAL_X86_REGISTER_DISCARD_RESULT BAL_X86_R11
 
+// Must be the same value as ASSEMBLER_TEMPORARY_REGISTER in bal_x86_sliding_window.c
+#define ASSEMBLER_TEMPORARY_REGISTER BAL_X86_R11
+
 static void reset_register_allocator(bal_tier1_compiler_t *compiler);
 
 static bal_x86_register_t allocate_x86_register(bal_tier1_compiler_t *compiler,
@@ -79,13 +82,17 @@ static void translate_cbz_cbnz(bal_tier1_compiler_t                     *compile
 
 static void translate_jump(const bal_tier1_compiler_t               *compiler,
                            const bal_decoder_instruction_metadata_t *metadata,
-                           uint32_t                            instruction,
-                           bal_guest_address_t                 guest_address,
+                           uint32_t                                  instruction,
+                           bal_guest_address_t                       guest_address,
                            bal_guest_address_t                      *target_pc);
 
 static void translate_and_reg(bal_tier1_compiler_t                     *compiler,
                               const bal_decoder_instruction_metadata_t *metadata,
                               uint32_t                                  instruction);
+
+static void translate_ldr(bal_tier1_compiler_t                     *compiler,
+                          const bal_decoder_instruction_metadata_t *metadata,
+                          uint32_t                                  instruction);
 
 static void translate_mov_immediate(bal_tier1_compiler_t                     *compiler,
                                     const bal_decoder_instruction_metadata_t *metadata,
@@ -474,6 +481,9 @@ bal_tier1_compiler_translate(bal_tier1_compiler_t         *compiler,
                                   (unsigned long long)guest_address);
                     compiler->status    = BAL_ERROR_UNKNOWN_INSTRUCTION;
                     is_block_terminated = true;
+                    break;
+                case OPCODE_LOAD:
+                    translate_ldr(compiler, metadata, instruction);
                     break;
                 default:
                     BAL_LOG_ERROR(&bal_thread_logger,
@@ -1449,6 +1459,120 @@ translate_and_reg(bal_tier1_compiler_t *BAL_RESTRICT                     compile
         };
         bal_sliding_window_push(&compiler->window, set_c_macro);
     }
+}
+
+void
+translate_ldr(bal_tier1_compiler_t                     *compiler,
+              const bal_decoder_instruction_metadata_t *metadata,
+              uint32_t                                  instruction)
+{
+    const bal_decoder_operand_t *BAL_RESTRICT operands = metadata->operands;
+    const uint8_t rt = (uint8_t)extract_operand_value(instruction, &operands[0]);
+    const uint8_t rn = (uint8_t)extract_operand_value(instruction, &operands[1]);
+
+    if (BAL_UNLIKELY(rt > 31))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: Rt (%u) out of range.", rt);
+        compiler->status = BAL_ERROR_INVALID_ARGUMENT;
+        return;
+    }
+
+    const bool is_64bit            = BAL_OPERAND_TYPE_REGISTER_64 == operands[0].type;
+    const bool is_immediate_offset = BAL_OPERAND_TYPE_IMMEDIATE == operands[2].type;
+    const bool is_register_offset  = BAL_OPERAND_TYPE_REGISTER_64 == operands[2].type
+                                    || BAL_OPERAND_TYPE_REGISTER_32 == operands[2].type;
+
+    if (BAL_UNLIKELY(false == is_immediate_offset && false == is_register_offset))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger,
+                      "Aborting function: unsupported LDR addressing mode "
+                      "(operand 2 type=%u",
+                      operands[2].type);
+        compiler->status = BAL_ERROR_UNKNOWN_INSTRUCTION;
+        return;
+    }
+
+    // Flush everything before the function call.
+    flush_dirty_registers(compiler);
+    bal_sliding_window_flush_all(&compiler->window);
+
+    bal_x86_assembler_t *BAL_RESTRICT assembler_context = &compiler->assembler;
+
+    // GVA = x[Rn] + offset
+
+    const int32_t rn_offset = (int32_t)(offsetof(bal_cpu_t, x) + rn * sizeof(uint64_t));
+    bal_x86_emit_load_r64_rbp_offset(assembler_context, ASSEMBLER_TEMPORARY_REGISTER, rn_offset);
+
+    if (true == is_immediate_offset)
+    {
+        // imm12 is scaled by the access size (8  for 64-bit, 4 for 32-bit).
+        const uint32_t raw_immediate = extract_operand_value(instruction, &operands[2]);
+        const uint32_t scale         = is_64bit ? 8U : 4U;
+        const int32_t  byte_offset   = (int32_t)(raw_immediate * scale);
+
+        if (byte_offset != 0)
+        {
+            bal_x86_emit_add_r64_imm32(
+                assembler_context, ASSEMBLER_TEMPORARY_REGISTER, byte_offset);
+        }
+    }
+    else
+    {
+        // GVA = x[Rn] + x[Rm].
+        const uint8_t rm = (uint8_t)extract_operand_value(instruction, &operands[2]);
+
+        if (BAL_UNLIKELY(rm > 31U))
+        {
+            BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: Rm (%u) out of range.", rm);
+            compiler->status = BAL_ERROR_INVALID_ARGUMENT;
+            return;
+        }
+
+        const int32_t rm_offset = (int32_t)(offsetof(bal_cpu_t, x) + rm * sizeof(uint64_t));
+
+        // Use R10 to avoid clobbering ASSEMBLER_TEMPORARY_REGISTER.
+        bal_x86_emit_load_r64_rbp_offset(assembler_context, BAL_X86_R10, rm_offset);
+        bal_x86_emit_add_r64_r64(assembler_context, ASSEMBLER_TEMPORARY_REGISTER, BAL_X86_R10);
+    }
+
+    bal_x86_emit_load_r64_rbp_offset(
+        assembler_context, BAL_X86_ABI_ARG1, offsetof(bal_cpu_t, guest_read_context));
+    bal_x86_emit_mov_r64_r64(assembler_context, BAL_X86_ABI_ARG2, ASSEMBLER_TEMPORARY_REGISTER);
+    bal_x86_emit_load_r64_rbp_offset(
+        assembler_context, ASSEMBLER_TEMPORARY_REGISTER, offsetof(bal_cpu_t, guest_read));
+
+#if BAL_PLATFORM_WINDOWS
+
+    // Windows require 32 bytes of shadow space before a call.
+    bal_x86_emit_sub_r64_imm32(assembler_context, BAL_X86_RSP, 32);
+
+#endif
+
+    bal_x86_emit_call_r64(assembler_context, ASSEMBLER_TEMPORARY_REGISTER);
+
+#if BAL_PLATFORM_WINDOWS
+
+    bal_x86_emit_add_r64_imm32(assembler_context, BAL_X86_RSP, 32);
+
+#endif
+
+    // Store the result RAX into x[Rt].
+
+    if (false == is_64bit)
+    {
+        // Clear the upper 32 bits.
+        bal_x86_emit_mov_r64_r64(assembler_context, BAL_X86_RAX, BAL_X86_RAX);
+    }
+
+    const int32_t rt_offset = (int32_t)(offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t));
+    bal_x86_emit_store_r64_rbp_offset(assembler_context, BAL_X86_RAX, rt_offset);
+    reset_register_allocator(compiler);
+
+    BAL_LOG_DEBUG(&bal_thread_logger,
+                  "Translated LDR  x%u, [x%u%s] -> helper call",
+                  rt,
+                  rn,
+                  is_immediate_offset ? ", #imm" : ", xm");
 }
 
 void
