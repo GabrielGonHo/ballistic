@@ -1479,6 +1479,14 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
     const uint8_t rt = (uint8_t)extract_operand_value(instruction, &operands[0]);
     const uint8_t rn = (uint8_t)extract_operand_value(instruction, &operands[1]);
 
+    if (BAL_UNLIKELY((instruction & (1U << 26)) != 0))
+    {
+        BAL_LOG_ERROR(
+            &bal_thread_logger, "Aborting function: SIMD/FP loads unsupported: %s", metadata->name);
+        compiler->status = BAL_ERROR_UNKNOWN_INSTRUCTION;
+        return;
+    }
+
     if (BAL_UNLIKELY(rt > 31))
     {
         BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: Rt (%u) out of range.", rt);
