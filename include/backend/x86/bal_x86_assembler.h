@@ -425,6 +425,21 @@ extern "C"
                                   bal_x86_register_t   destination,
                                   bal_x86_register_t   source);
 
+    /// Emits an instruction to move a 32-bit register `source` into `destination`.
+    ///
+    /// Assembly equivalent: `mov reg32, reg32`
+    ///
+    /// # Warning
+    ///
+    /// This function fails if:
+    ///
+    /// - `assembler` is `NULL`.
+    /// - `assembler->status` != [`BAL_SUCCESS`]
+    /// - `assembler->buffer` is full.
+    void bal_x86_emit_mov_r32_r32(bal_x86_assembler_t *assembler,
+                                  bal_x86_register_t   destination,
+                                  bal_x86_register_t   source);
+
     /// Emits a bitwise OR instruction between two 64-bit registers.
     ///
     /// Assembly equivalent: `or destination, source`.
