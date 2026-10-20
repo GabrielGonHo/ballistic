@@ -22,6 +22,7 @@ static const char *const BAL_X86_MACRO_NAMES[] = {
     "LOAD",
     "MOV_REGISTER_IMMEDIATE",
     "MOV_REGISTER_REGISTER",
+    "MOV_REGISTER_REGISTER_32",
     "OR_REGISTER_IMMEDIATE",
     "OR_REGISTER_REGISTER",
     "RET",
@@ -284,6 +285,9 @@ flush_single_macro(bal_x86_assembler_t *BAL_RESTRICT   assembler,
             break;
         case BAL_X86_MACRO_MOV_REGISTER_REGISTER:
             bal_x86_emit_mov_r64_r64(assembler, destination, source);
+            break;
+        case BAL_X86_MACRO_MOV_REGISTER_REGISTER_32:
+            bal_x86_emit_mov_r32_r32(assembler, destination, source);
             break;
         case BAL_X86_MACRO_OR_REGISTER_IMMEDIATE:
             BAL_ASSERT_MSG(destination != ASSEMBLER_TEMPORARY_REGISTER,
