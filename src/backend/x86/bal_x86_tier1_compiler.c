@@ -483,6 +483,15 @@ bal_tier1_compiler_translate(bal_tier1_compiler_t         *compiler,
                     is_block_terminated = true;
                     break;
                 case OPCODE_LOAD:
+                    if (0 == strncmp(metadata->name, "LDP", 3U)
+                        || 0 == strncmp(metadata->name, "LDNP", 4U))
+                    {
+                        BAL_LOG_ERROR(
+                            &bal_thread_logger, "Unsupported load instruction: %s", metadata->name);
+                        compiler->status = BAL_ERROR_UNKNOWN_INSTRUCTION;
+                        break;
+                    }
+
                     translate_ldr(compiler, metadata, instruction);
                     break;
                 default:
