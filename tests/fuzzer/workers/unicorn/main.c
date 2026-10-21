@@ -71,6 +71,21 @@ main(void)
             continue;
         }
 
+        // Emit a RET to match the ballistic worker.
+        const uint32_t ret_instruction = 0xD65F03C0U;
+        unicorn_error                  = uc_mem_write(engine,
+                                     GUEST_BASE_ADDRESS + code_buffer_size_bytes,
+                                     &ret_instruction,
+                                     sizeof(ret_instruction));
+
+        if (unicorn_error != UC_ERR_OK)
+        {
+            response.status = BAL_FUZZER_WORKER_ERROR_COMPILE_FAILED;
+            (void)uc_mem_unmap(engine, GUEST_BASE_ADDRESS, GUEST_MEMORY_SIZE);
+            (void)bal_fuzzer_ipc_send(STDOUT_FILENO, &response, sizeof(response));
+            continue;
+        }
+
         int   register_ids[32];
         void *register_values[32];
 
