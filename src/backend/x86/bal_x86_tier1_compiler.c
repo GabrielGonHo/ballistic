@@ -1624,15 +1624,41 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
 
     if (rt != 31U)
     {
-        if (false == is_64bit)
+        const uint32_t size_bits = (instruction >> 30) & 0x3U;
+
+        if (0U == size_bits)
         {
-            // Clear the upper 32 bits.
+            // LDRB: mask to 1 byte.
+            const bal_x86_macro_t mask_macro = {
+                .opcode              = BAL_X86_MACRO_AND_REGISTER_IMMEDIATE,
+                .destination         = BAL_X86_RAX,
+                .immediate_or_offset = 0xFFULL,
+            };
+            bal_sliding_window_push(&compiler->window, mask_macro);
+        }
+        else if (1U == size_bits)
+        {
+            // LDRH: mask to 2 bytes.
+            const bal_x86_macro_t mask_macro = {
+                .opcode              = BAL_X86_MACRO_AND_REGISTER_IMMEDIATE,
+                .destination         = BAL_X86_RAX,
+                .immediate_or_offset = 0xFFFFULL,
+            };
+            bal_sliding_window_push(&compiler->window, mask_macro);
+        }
+        else if (false == is_64bit)
+        {
+            // LDR (32-bit): Clear the upper 32 bits.
             bal_x86_macro_t zero_extend_macro = {
                 .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER_32,
                 .destination = BAL_X86_RAX,
                 .source      = BAL_X86_RAX,
             };
             bal_sliding_window_push(&compiler->window, zero_extend_macro);
+        }
+        else
+        {
+            // 64bit LDR so no mask needed.
         }
 
         const uint64_t        rt_offset      = offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t);
