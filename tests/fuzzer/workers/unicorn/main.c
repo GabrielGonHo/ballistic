@@ -95,6 +95,18 @@ main(void)
             continue;
         }
 
+        // Unicorn keep SP and XZR registers separate. Sync them.
+        uint64_t sp   = input.initial_state.x[31];
+        unicorn_error = uc_reg_write(engine, UC_ARM64_REG_SP, &sp);
+
+        if (unicorn_error != UC_ERR_OK)
+        {
+            response.status = BAL_FUZZER_WORKER_ERROR_EXECUTION_FAILED;
+            (void)uc_mem_unmap(engine, GUEST_BASE_ADDRESS, GUEST_MEMORY_SIZE);
+            (void)bal_fuzzer_ipc_send(STDOUT_FILENO, &response, sizeof(response));
+            continue;
+        }
+
         uint64_t pc   = GUEST_BASE_ADDRESS + input.initial_state.pc;
         unicorn_error = uc_reg_write(engine, UC_ARM64_REG_PC, &pc);
 
