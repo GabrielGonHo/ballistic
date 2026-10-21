@@ -1622,24 +1622,27 @@ translate_ldr(bal_tier1_compiler_t                     *compiler,
 
     // Store the result RAX into x[Rt].
 
-    if (false == is_64bit)
+    if (rt != 31U)
     {
-        // Clear the upper 32 bits.
-        bal_x86_macro_t zero_extend_macro = {
-            .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER_32,
-            .destination = BAL_X86_RAX,
-            .source      = BAL_X86_RAX,
-        };
-        bal_sliding_window_push(&compiler->window, zero_extend_macro);
-    }
+        if (false == is_64bit)
+        {
+            // Clear the upper 32 bits.
+            bal_x86_macro_t zero_extend_macro = {
+                .opcode      = BAL_X86_MACRO_MOV_REGISTER_REGISTER_32,
+                .destination = BAL_X86_RAX,
+                .source      = BAL_X86_RAX,
+            };
+            bal_sliding_window_push(&compiler->window, zero_extend_macro);
+        }
 
-    const uint64_t        rt_offset      = offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t);
-    const bal_x86_macro_t store_rt_macro = {
-        .opcode              = BAL_X86_MACRO_STORE,
-        .source              = BAL_X86_RAX,
-        .immediate_or_offset = rt_offset,
-    };
-    bal_sliding_window_push(&compiler->window, store_rt_macro);
+        const uint64_t        rt_offset      = offsetof(bal_cpu_t, x) + rt * sizeof(uint64_t);
+        const bal_x86_macro_t store_rt_macro = {
+            .opcode              = BAL_X86_MACRO_STORE,
+            .source              = BAL_X86_RAX,
+            .immediate_or_offset = rt_offset,
+        };
+        bal_sliding_window_push(&compiler->window, store_rt_macro);
+    }
     reset_register_allocator(compiler);
 
     BAL_LOG_DEBUG(&bal_thread_logger,
