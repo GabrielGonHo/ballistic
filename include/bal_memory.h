@@ -95,6 +95,13 @@ extern "C"
     /// The implementation must write the number of contiguous, readable bytes
     /// available at the returned pointer into `max_readable_size_bytes`. This prevents
     /// Ballistic from reading beyond the end of a mapped page or buffer.
+    ///
+    /// The translation must not end mid-access. If only 4 bytes remain readable, an 8-byte load
+    /// must not be permitted.
+    ///
+    /// The returned pointer must remained valid until the next call to this function completes.
+    ///
+    /// Do NOT call any functions in bal_engine.h.
     typedef const uint8_t *(*bal_translate_function_t)(void               *context,
                                                        bal_guest_address_t guest_address,
                                                        size_t             *max_readable_size_bytes);
