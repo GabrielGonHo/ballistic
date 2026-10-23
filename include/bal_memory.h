@@ -106,6 +106,24 @@ extern "C"
                                                        bal_guest_address_t guest_address,
                                                        size_t             *max_readable_size_bytes);
 
+    /// Describes a contiguous, linear guest-to-host memory mapping.
+    ///
+    /// Guest addresses in the range [`guest_base`, `guest_base` + `guest_size`) map to host
+    /// addresses starting at `host_base`:
+    ///
+    /// `host_address = host_base + (guest_address - guest_base)`
+    typedef struct
+    {
+        /// Host base address of the region.
+        uint8_t *host_base;
+
+        /// The first Guest Virtual Address covered by the region.
+        bal_guest_address_t guest_base;
+
+        /// The number of contiguous, readable bytes available from `host_base`.
+        uint64_t guest_size;
+    } bal_memory_region_t;
+
     /// The host application is responsible for providing an allocator capable of
     /// handling aligned memory requests.
     typedef struct
