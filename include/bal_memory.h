@@ -124,6 +124,31 @@ extern "C"
         uint64_t guest_size;
     } bal_memory_region_t;
 
+    /// Describes a contiguous guest memory region that maps linearly into host memory.
+    ///
+    /// This enables fast-path memory access. Ballistic will query this callback before accessing
+    /// guest memory. If a valid region is returned, Ballistic may inline direct host loads and
+    /// stores against `host_base` without invoking [`bal_translate_function_t`] per access. If
+    /// this callback is `NULL` or returns an error, Ballistic falls back to
+    /// [`bal_translate_function_t`].
+    ///
+    /// # Returns
+    ///
+    /// * [`BAL_SUCCESS`] if a region containing `guest_address` was written to `out`.
+    /// * [`BAL_ERROR_MEMORY_FAULT`] if no describable region contains `guest_address`.
+    /// * [`BAL_ERROR_INVALID_ARGUMENT`] if `interface` or `out` is `NULL`.
+    ///
+    /// # Safety
+    ///
+    /// `interface` receives the [`bal_memory_interface_t`] pointer registered with the engine
+    /// via [`bal_engine_init()`].
+    ///
+    /// The implementation must be free of side effects because Ballistic may call this function
+    /// speculatively, when emitting instructions, and more often than the guest executes memory.
+    ///
+    /// `bal_memory_region_t.guest_size` is the number of contiguous, readable bytes from
+    /// `host_base`. The function must not end mid-access (ff only 4 bytes remain readable, an
+    /// 8-byte load must not be permitted).
     typedef bal_error_t (*bal_memory_describe_region_function_t)(void                *interface,
                                                                  bal_guest_address_t  guest_address,
                                                                  bal_memory_region_t *out);
@@ -170,7 +195,7 @@ extern "C"
         /// The callback invoked to perform address translation.
         bal_translate_function_t translate;
 
-        /// Optional fast path memory access. `NULL` disables the fast path.
+        /// Enables fast path memory access. `NULL` disables the fast path.
         bal_memory_describe_region_function_t describe_region;
     } bal_memory_interface_t;
 
