@@ -7,24 +7,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-BAL_WEAK void *                  bal_default_allocate(bal_allocator_handle_t, size_t, size_t);
+BAL_WEAK void                   *bal_default_allocate(bal_allocator_handle_t, size_t, size_t);
 BAL_WEAK void                    bal_default_free(bal_allocator_handle_t, void *, size_t);
 BAL_WEAK bal_executable_buffer_t bal_default_allocate_executable(bal_allocator_handle_t handle,
                                                                  size_t                 alignment,
                                                                  size_t                 size);
-BAL_WEAK void bal_default_free_executable(bal_allocator_handle_t  handle,
-                                          bal_executable_buffer_t buffer,
-                                          size_t                  size);
-BAL_WEAK void bal_default_protect_rw(bal_allocator_handle_t  handle,
-                                     bal_executable_buffer_t buffer,
-                                     size_t                  size);
-BAL_WEAK void bal_default_protect_rx(bal_allocator_handle_t  handle,
-                                     bal_executable_buffer_t buffer,
-                                     size_t                  size);
+BAL_WEAK void                    bal_default_free_executable(bal_allocator_handle_t  handle,
+                                                             bal_executable_buffer_t buffer,
+                                                             size_t                  size);
+BAL_WEAK void                    bal_default_protect_rw(bal_allocator_handle_t  handle,
+                                                        bal_executable_buffer_t buffer,
+                                                        size_t                  size);
+BAL_WEAK void                    bal_default_protect_rx(bal_allocator_handle_t  handle,
+                                                        bal_executable_buffer_t buffer,
+                                                        size_t                  size);
 
 BAL_WEAK BAL_HOT const uint8_t *bal_flat_translation_interface_translate(void *,
-    bal_guest_address_t,
-    size_t *);
+                                                                         bal_guest_address_t,
+                                                                         size_t *);
+
+BAL_WEAK BAL_HOT bal_error_t bal_flat_translation_interface_describe_region(
+    void *interface, bal_guest_address_t guest_address, bal_memory_region_t *out);
 
 typedef struct
 {
@@ -83,9 +86,7 @@ bal_flat_translation_interface_init(bal_allocator_t *BAL_RESTRICT        allocat
 
     const size_t                  memory_alignment_bytes = 16U;
     flat_translation_interface_t *flat_interface         = allocator->allocate(
-        allocator->context,
-        memory_alignment_bytes,
-        sizeof(flat_translation_interface_t));
+        allocator->context, memory_alignment_bytes, sizeof(flat_translation_interface_t));
 
     if (NULL == flat_interface)
     {
@@ -95,21 +96,20 @@ bal_flat_translation_interface_init(bal_allocator_t *BAL_RESTRICT        allocat
         return BAL_ERROR_ALLOCATION_FAILED;
     }
 
-    flat_interface->host = (uint8_t *)buffer;
-    flat_interface->size = size;
-    interface->context   = flat_interface;
-    interface->translate = bal_flat_translation_interface_translate;
+    flat_interface->host       = (uint8_t *)buffer;
+    flat_interface->size       = size;
+    interface->context         = flat_interface;
+    interface->translate       = bal_flat_translation_interface_translate;
+    interface->describe_region = bal_flat_translation_interface_describe_region;
 
     BAL_LOG_INFO(
-        &bal_thread_logger,
-        "Flat interface created successfully at %p.",
-        (void *)flat_interface);
+        &bal_thread_logger, "Flat interface created successfully at %p.", (void *)flat_interface);
 
     return BAL_SUCCESS;
 }
 
 bal_error_t
-bal_flat_translation_interface_destroy(bal_allocator_t *       allocator,
+bal_flat_translation_interface_destroy(bal_allocator_t        *allocator,
                                        bal_memory_interface_t *interface)
 {
     if (NULL == allocator || NULL == interface)
@@ -119,12 +119,12 @@ bal_flat_translation_interface_destroy(bal_allocator_t *       allocator,
 
     if (NULL == interface->context)
     {
-        *interface = (bal_memory_interface_t){};
+        *interface = (bal_memory_interface_t) {};
         return BAL_SUCCESS;
     }
 
     allocator->free(allocator->context, interface->context, sizeof(flat_translation_interface_t));
-    *interface = (bal_memory_interface_t){};
+    *interface = (bal_memory_interface_t) {};
     return BAL_SUCCESS;
 }
 
@@ -174,7 +174,7 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
 
     if (0 == size)
     {
-        return (bal_executable_buffer_t){ NULL, NULL };
+        return (bal_executable_buffer_t) { NULL, NULL };
     }
 
     void *memory = mmap(NULL,
@@ -186,10 +186,10 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
 
     if (memory == MAP_FAILED)
     {
-        return (bal_executable_buffer_t){ NULL, NULL };
+        return (bal_executable_buffer_t) { NULL, NULL };
     }
 
-    return (bal_executable_buffer_t){ memory, memory };
+    return (bal_executable_buffer_t) { memory, memory };
 }
 
 void
@@ -234,10 +234,10 @@ bal_default_protect_rx(bal_allocator_handle_t handle, bal_executable_buffer_t bu
 #endif /* BAL_PLATFORM_APPLE */
 
 #if BAL_PLATFORM_LINUX
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
-#include <errno.h>
 
 bal_executable_buffer_t
 bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment, size_t size)
@@ -252,9 +252,9 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
         return invalid_buffer;
     }
 
-    const char *const shm_name = "/ballistic_jit_compiler_shm";
-    const int max_attempts = 2;
-    int fd = -1;
+    const char *const shm_name     = "/ballistic_jit_compiler_shm";
+    const int         max_attempts = 2;
+    int               fd           = -1;
 
     for (int attempt = 0; attempt < max_attempts; ++attempt)
     {
@@ -268,11 +268,11 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
         if (EEXIST == errno)
         {
             BAL_LOG_ERROR(&bal_thread_logger,
-                                      "Stale shared memory object detected. Retrying shm_open "
-                                      "(Allocator: %p, Alignment: %zu, Size: %zu).",
-                                      (void*)handle,
-                                      alignment,
-                                      size);
+                          "Stale shared memory object detected. Retrying shm_open "
+                          "(Allocator: %p, Alignment: %zu, Size: %zu).",
+                          (void *)handle,
+                          alignment,
+                          size);
             shm_unlink(shm_name);
             continue;
         }
@@ -312,7 +312,7 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
 
     close(fd);
 
-    return (bal_executable_buffer_t){ rw_ptr, rx_ptr };
+    return (bal_executable_buffer_t) { rw_ptr, rx_ptr };
 }
 
 void
@@ -401,12 +401,7 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
     }
 
     HANDLE mapping = CreateFileMapping(
-        INVALID_HANDLE_VALUE,
-        NULL,
-        PAGE_EXECUTE_READWRITE,
-        0,
-        (DWORD)size,
-        NULL);
+        INVALID_HANDLE_VALUE, NULL, PAGE_EXECUTE_READWRITE, 0, (DWORD)size, NULL);
 
     if (!mapping)
     {
@@ -429,7 +424,7 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
         return invalid_buffer;
     }
 
-    return (bal_executable_buffer_t){ rw_ptr, rx_ptr };
+    return (bal_executable_buffer_t) { rw_ptr, rx_ptr };
 }
 
 void
@@ -508,6 +503,52 @@ bal_flat_translation_interface_translate(void *BAL_RESTRICT   interface,
                   (unsigned long long)guest_address,
                   (void *)host_address);
     return host_address;
+}
+
+bal_error_t
+bal_flat_translation_interface_describe_region(void                *interface,
+                                               bal_guest_address_t  guest_address,
+                                               bal_memory_region_t *out)
+{
+    if (BAL_UNLIKELY(NULL == interface))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: interface is NULL.");
+        return BAL_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (BAL_UNLIKELY(NULL == out))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: memory_region is NULL");
+        return BAL_ERROR_INVALID_ARGUMENT;
+    }
+
+    const flat_translation_interface_t *BAL_RESTRICT context
+        = ((bal_memory_interface_t *)interface)->context;
+
+    if (BAL_UNLIKELY(NULL == context))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger, "Aborting function: interface->context is NULL.");
+        return BAL_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (BAL_UNLIKELY(guest_address >= context->size))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger,
+                      "Aborting function: GVA 0x%llx is outside the flat "
+                      "buffer (Limit: 0x%llx).",
+                      (unsigned long long)guest_address,
+                      (unsigned long long)context->size);
+        return BAL_ERROR_MEMORY_FAULT;
+    }
+
+    out->host_base  = context->host;
+    out->guest_base = 0U;
+    out->guest_size = context->size;
+    BAL_LOG_TRACE(&bal_thread_logger,
+                  "Describe flat region: Host %p, Size %llu bytes",
+                  (void *)out->host_base,
+                  (unsigned long long)out->guest_size);
+    return BAL_SUCCESS;
 }
 
 /*** end of file ***/

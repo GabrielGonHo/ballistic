@@ -124,6 +124,10 @@ extern "C"
         uint64_t guest_size;
     } bal_memory_region_t;
 
+    typedef bal_error_t (*bal_memory_describe_region_function_t)(void                *interface,
+                                                                 bal_guest_address_t  guest_address,
+                                                                 bal_memory_region_t *out);
+
     /// The host application is responsible for providing an allocator capable of
     /// handling aligned memory requests.
     typedef struct
@@ -165,6 +169,9 @@ extern "C"
 
         /// The callback invoked to perform address translation.
         bal_translate_function_t translate;
+
+        /// Optional fast path memory access. `NULL` disables the fast path.
+        bal_memory_describe_region_function_t describe_region;
     } bal_memory_interface_t;
 
     /// Populates `out_allocator` with the default system implementation.
