@@ -887,6 +887,7 @@ terminate_block_conditional(bal_tier1_compiler_t     *compiler,
 
     flush_dirty_registers(compiler);
     bal_sliding_window_flush_all(&compiler->window);
+    compiler->is_dirty = 0U;
 
     // Emit fallthrough epilogue.
     bal_x86_emit_mov_r64_imm64(&compiler->assembler, BAL_X86_RAX, fallthrough_pc);
@@ -903,6 +904,10 @@ terminate_block_conditional(bal_tier1_compiler_t     *compiler,
     // Emit taken epilogue.
     bal_x86_emit_mov_r64_imm64(&compiler->assembler, BAL_X86_RAX, taken_pc);
     bal_x86_emit_store_r64_rbp_offset(&compiler->assembler, BAL_X86_RAX, offsetof(bal_cpu_t, pc));
+    bal_x86_emit_pop_r64(&compiler->assembler, BAL_X86_R15);
+    bal_x86_emit_pop_r64(&compiler->assembler, BAL_X86_R14);
+    bal_x86_emit_pop_r64(&compiler->assembler, BAL_X86_R13);
+    bal_x86_emit_pop_r64(&compiler->assembler, BAL_X86_R12);
     bal_x86_emit_pop_r64(&compiler->assembler, BAL_X86_RBP);
     bal_x86_emit_ret(&compiler->assembler);
 }
@@ -1241,8 +1246,13 @@ translate_b_cond(bal_tier1_compiler_t *BAL_RESTRICT compiler,
         case 0xE:  // AL (always)
             flush_dirty_registers(compiler);
             bal_sliding_window_flush_all(&compiler->window);
+            compiler->is_dirty = 0U;
             bal_x86_emit_mov_r64_imm64(assembler, BAL_X86_RAX, taken_pc);
             bal_x86_emit_store_r64_rbp_offset(assembler, BAL_X86_RAX, offsetof(bal_cpu_t, pc));
+            bal_x86_emit_pop_r64(assembler, BAL_X86_R15);
+            bal_x86_emit_pop_r64(assembler, BAL_X86_R14);
+            bal_x86_emit_pop_r64(assembler, BAL_X86_R13);
+            bal_x86_emit_pop_r64(assembler, BAL_X86_R12);
             bal_x86_emit_pop_r64(assembler, BAL_X86_RBP);
             bal_x86_emit_ret(assembler);
             return;
