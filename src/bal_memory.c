@@ -302,7 +302,10 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
 
     if (MAP_FAILED == rw_ptr)
     {
-        munmap(rw_ptr, size);
+        if (MAP_FAILED != rx_ptr)
+        {
+            munmap(rx_ptr, size);
+        }
         close(fd);
         return invalid_buffer;
     }
@@ -418,13 +421,16 @@ bal_default_allocate_executable(bal_allocator_handle_t handle, size_t alignment,
 
     if (NULL == rw_ptr)
     {
-        UnmapViewOfFile(rw_ptr);
+        if (NULL != rx_ptr)
+        {
+            UnmapViewOfFile(rx_ptr);
+        }
         return invalid_buffer;
     }
 
     if (NULL == rx_ptr)
     {
-        UnmapViewOfFile(rx_ptr);
+        UnmapViewOfFile(rw_ptr);
         return invalid_buffer;
     }
 
@@ -445,6 +451,12 @@ void
 bal_default_protect_rx(bal_allocator_handle_t handle, bal_executable_buffer_t buffer, size_t size)
 {
     (void)handle;
+
+    if (NULL == buffer.rx_pointer)
+    {
+        return;
+    }
+
     FlushInstructionCache(GetCurrentProcess(), buffer.rx_pointer, size);
 }
 
