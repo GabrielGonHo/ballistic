@@ -697,19 +697,36 @@ local function get_xml_files(directory)
 
         scan_windows(directory)
     else
-        ffi.cdef [[
-            typedef struct DIR DIR;
-            struct dirent {
-                unsigned long  d_ino;
-                unsigned long  d_off;
-                unsigned short d_reclen;
-                unsigned char  d_type;
-                char           d_name[256];
-            };
-            DIR *opendir(const char *name);
-            struct dirent *readdir(DIR *dirp);
-            int closedir(DIR *dirp);
-        ]]
+        if ffi.os == "OSX" then
+            ffi.cdef [[
+                typedef struct DIR DIR;
+                struct dirent {
+                    unsigned long d_ino;
+                    unsigned long d_seekoff;
+                    unsigned short d_reclen;
+                    unsigned short d_namlen;
+                    unsigned char d_type;
+                    char d_name[1024];
+                };
+                DIR *opendir(const char *name);
+                struct dirent *readdir(DIR *dirp);
+                int closedir(DIR *dirp);
+            ]]
+        else
+            ffi.cdef [[
+                typedef struct DIR DIR;
+                struct dirent {
+                    unsigned long d_ino;
+                    unsigned long d_off;
+                    unsigned short d_reclen;
+                    unsigned char d_type;
+                    char d_name[256];
+                };
+                DIR *opendir(const char *name);
+                struct dirent *readdir(DIR *dirp);
+                int closedir(DIR *dirp);
+            ]]
+        end
 
         local function scan_posix(path)
             local d = ffi.C.opendir(path)
