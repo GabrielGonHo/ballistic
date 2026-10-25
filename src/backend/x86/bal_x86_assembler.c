@@ -320,8 +320,14 @@ bal_x86_emit_jmp_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t re
         return;
     }
 
-    size_t     instruction_size_bytes = 2;
-    const bool can_emit_status        = can_emit(assembler, instruction_size_bytes);
+    size_t     instruction_size_bytes = 2U;
+
+    if (reg > 7)
+    {
+        instruction_size_bytes = 3U;
+    }
+
+    const bool can_emit_status = can_emit(assembler, instruction_size_bytes);
 
     if (BAL_UNLIKELY(false == can_emit_status))
     {
@@ -339,7 +345,6 @@ bal_x86_emit_jmp_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t re
         // WARNING: reg is verified by is_valid_register() to fall within the safe enum range.
         const uint8_t b = (uint8_t)reg >> 3;
         emit_rex(assembler->buffer, &assembler->offset, w, r, b);
-        ++instruction_size_bytes;
     }
 
     const uint8_t opcode = 0xFF;
@@ -990,8 +995,14 @@ bal_x86_emit_push_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t r
         return;
     }
 
-    size_t     instruction_size_bytes = 1;
-    const bool can_emit_status        = can_emit(assembler, instruction_size_bytes);
+    size_t instruction_size_bytes = 1U;
+
+    if (reg > 7)
+    {
+        instruction_size_bytes = 2U;
+    }
+
+    const bool can_emit_status = can_emit(assembler, instruction_size_bytes);
 
     if (BAL_UNLIKELY(false == can_emit_status))
     {
@@ -1011,7 +1022,6 @@ bal_x86_emit_push_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t r
         const uint8_t b = (uint8_t)reg >> 3;
 
         emit_rex(assembler->buffer, &assembler->offset, w, r, b);
-        ++instruction_size_bytes;
     }
 
     const uint8_t opcode = 0x50;
@@ -1047,8 +1057,14 @@ bal_x86_emit_pop_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t re
         return;
     }
 
-    size_t     instruction_size_bytes = 1;
-    const bool can_emit_status        = can_emit(assembler, instruction_size_bytes);
+    size_t instruction_size_bytes = 1U;
+
+    if (reg > 7)
+    {
+        instruction_size_bytes = 2U;
+    }
+
+    const bool can_emit_status = can_emit(assembler, instruction_size_bytes);
 
     if (BAL_UNLIKELY(false == can_emit_status))
     {
@@ -1068,7 +1084,6 @@ bal_x86_emit_pop_r64(bal_x86_assembler_t *assembler, const bal_x86_register_t re
         const uint8_t b = (uint8_t)reg >> 3;
 
         emit_rex(assembler->buffer, &assembler->offset, w, r, b);
-        ++instruction_size_bytes;
     }
 
     const uint8_t opcode = 0x58;
