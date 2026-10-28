@@ -269,7 +269,7 @@ bal_engine_run_thread(bal_engine_t *engine)
     bool expected = false;
     if (!atomic_compare_exchange_strong_explicit(&internal_engine_state->thread_state.is_executing,
                                                  &expected,
-                                                 false,
+                                                 true,
                                                  memory_order_acq_rel,
                                                  memory_order_acquire))
     {
