@@ -269,7 +269,7 @@ bal_engine_run_thread(bal_engine_t *engine)
     bool expected = false;
     if (!atomic_compare_exchange_strong_explicit(&internal_engine_state->thread_state.is_executing,
                                                  &expected,
-                                                 false,
+                                                 true,
                                                  memory_order_acq_rel,
                                                  memory_order_acquire))
     {
@@ -446,7 +446,18 @@ bal_engine_reset(bal_engine_t *BAL_RESTRICT engine)
     engine->status = BAL_SUCCESS;
     internal_engine_state_t *BAL_RESTRICT engine_state
         = (internal_engine_state_t *)engine->engine_state;
-    (void)memset(&engine_state->tier1_buffer, 0, engine_state->tier1_buffer_size);
+
+    if (BAL_UNLIKELY(NULL == engine_state))
+    {
+        BAL_LOG_ERROR(&bal_thread_logger,
+                      "Aborting function: Engine state is NULL. Engine was never initialized.");
+        return BAL_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (NULL != engine_state->tier1_buffer.rw_pointer)
+    {
+        (void)memset(engine_state->tier1_buffer.rw_pointer, 0, engine_state->tier1_buffer_size);
+    }
     bal_tier1_compiler_reset(&engine_state->tier1_compiler);
     return engine->status;
 }

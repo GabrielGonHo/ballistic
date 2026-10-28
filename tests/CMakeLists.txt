@@ -96,21 +96,40 @@ set_tests_properties(doctest PROPERTIES
 
 # TODO (GloriousTaco): Support IPC on Windows.
 if (UNIX)
-    set(UNICORN_ROOT_LINUX "${CMAKE_SOURCE_DIR}/extern/Unicorn/linux")
+    if (LINUX)
+        set(UNICORN_ROOT_LINUX "${CMAKE_SOURCE_DIR}/extern/Unicorn/linux")
 
-    if (NOT EXISTS "${UNICORN_ROOT_LINUX}/lib/libunicorn.so")
-        message(FATAL_ERROR "[Ballistic-Tests] Unicorn shared library not found at ${UNICORN_ROOT_LINUX}/lib/libunicorn
+        if (NOT EXISTS "${UNICORN_ROOT_LINUX}/lib/libunicorn.so")
+            message(FATAL_ERROR "[Ballistic-Tests] Unicorn shared library not found at ${UNICORN_ROOT_LINUX}/lib/libunicorn
         .so.")
+        endif ()
+
+        add_library(Unicorn SHARED IMPORTED GLOBAL)
+        set_target_properties(Unicorn PROPERTIES
+                IMPORTED_LOCATION "${UNICORN_ROOT_LINUX}/lib/libunicorn.so"
+                IMPORTED_SONAME "libunicorn.so.2"
+                INTERFACE_INCLUDE_DIRECTORIES "${UNICORN_ROOT_LINUX}/include"
+        )
+
+        message(STATUS "[Ballistic-Tests] Found Unicorn at ${UNICORN_ROOT_LINUX}.")
+    else ()
+        set(UNICORN_ROOT_MACOS "${CMAKE_SOURCE_DIR}/extern/Unicorn/macos")
+
+        if (NOT EXISTS "${UNICORN_ROOT_MACOS}/lib/libunicorn.dylib")
+            message(FATAL_ERROR "[Ballistic-Tests] Unicorn dynamic library not found at
+                ${UNICORN_ROOT_MACOS}/lib/libunicorn.dylib")
+        endif ()
+
+        add_library(Unicorn SHARED IMPORTED GLOBAL)
+        set_target_properties(Unicorn PROPERTIES
+                IMPORTED_LOCATION "${UNICORN_ROOT_MACOS}/lib/libunicorn.dylib"
+                IMPORTED_SONAME "libunicorn.2.dylib"
+                INTERFACE_INCLUDE_DIRECTORIES "${UNICORN_ROOT_MACOS}/include"
+        )
+
+        message(STATUS "[Ballistic-Tests] Found Unicorn at ${UNICORN_ROOT_MACOS}.")
     endif ()
 
-    add_library(Unicorn SHARED IMPORTED GLOBAL)
-    set_target_properties(Unicorn PROPERTIES
-            IMPORTED_LOCATION "${UNICORN_ROOT_LINUX}/lib/libunicorn.so"
-            IMPORTED_SONAME "libunicorn.so.2"
-            INTERFACE_INCLUDE_DIRECTORIES "${UNICORN_ROOT_LINUX}/include"
-    )
-
-    message(STATUS "[Ballistic-Tests] Found Unicorn at ${UNICORN_ROOT_LINUX}.")
     message(STATUS "[Ballistic-Tests] Configuring Fuzzer...")
     add_subdirectory(fuzzer)
 endif ()

@@ -628,7 +628,7 @@ allocate_x86_register(bal_tier1_compiler_t *BAL_RESTRICT compiler,
     {
         const int8_t cached_x86_register = compiler->arm_to_x86[arm_register];
 
-        if (BAL_UNLIKELY(cached_x86_register < 0 || cached_x86_register >= (int8_t)BAL_X86_R15))
+        if (BAL_UNLIKELY(cached_x86_register < 0 || cached_x86_register > (int8_t)BAL_X86_R15))
         {
             BAL_LOG_ERROR(&bal_thread_logger,
                           "RegAlloc: corrupted mapping ARM X%u -> x86 r%d. "
@@ -1694,6 +1694,13 @@ translate_mov_immediate(bal_tier1_compiler_t                     *compiler,
                         const uint32_t                            instruction)
 {
     const uint8_t  rd      = (uint8_t)extract_operand_value(instruction, &metadata->operands[0]);
+
+    // Move-wide instructions discard writes to XZR/WZR.
+    // Register slot 31 stores SP in bal_cpu_t.
+    if (rd == 31U)
+    {
+        return;
+    }
     const uint64_t imm16   = extract_operand_value(instruction, &metadata->operands[1]);
     const uint64_t hw      = extract_operand_value(instruction, &metadata->operands[2]);
     const uint64_t shift   = hw * 16ULL;
