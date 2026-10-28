@@ -1684,6 +1684,13 @@ translate_mov_immediate(bal_tier1_compiler_t                     *compiler,
                         const uint32_t                            instruction)
 {
     const uint8_t  rd      = (uint8_t)extract_operand_value(instruction, &metadata->operands[0]);
+
+    // Move-wide instructions discard writes to XZR/WZR.
+    // Register slot 31 stores SP in bal_cpu_t.
+    if (rd == 31U)
+    {
+        return;
+    }
     const uint64_t imm16   = extract_operand_value(instruction, &metadata->operands[1]);
     const uint64_t hw      = extract_operand_value(instruction, &metadata->operands[2]);
     const uint64_t shift   = hw * 16ULL;
